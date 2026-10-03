@@ -1,0 +1,4 @@
+{
+  "test": true,
+  "description": "Validation target for config-check CI step"
+}
