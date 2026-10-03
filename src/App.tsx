@@ -4,7 +4,7 @@ import { getCurrentWindow } from '@tauri-apps/api/window';
 import { listen } from '@tauri-apps/api/event';
 import { decodeSubscription, parseLinks, type VNode } from './parser';
 import { buildConfig, buildAetherConfig } from './singbox';
-import { BUILTIN_SOURCES, DEFAULT_TOP_N, PROXY_PORT, RELEASE_API, RELEASE_PAGE, type SubSource } from './config';
+import { BUILTIN_SOURCES, DEFAULT_TOP_N, PROXY_PORT, RELEASE_API, RELEASE_PAGE, type SubSource, type AetherProto, type AetherScan } from './config';
 import { smartScan, realTest, type ScanState } from './scan';
 import { t, type Lang } from './i18n';
 import { I } from './icons';
@@ -16,10 +16,11 @@ import { Area, Count } from './components/bits';
 
 type Status = 'idle' | 'connecting' | 'connected';
 type Mode = 'tun' | 'proxy';
-type ConnectionModel = 'configs' | 'aether';
 type Page = 'home' | 'servers' | 'stats' | 'settings';
-type Step = '' | 'test' | 'start' | 'switch';
-type Theme = 'violet' | 'cyan' | 'emerald' | 'sunset';
+type Step = '' | 'test' | 'start' | 'switch' | 'aether';
+/** v2.5: مدل اتصال · v2 = مدل ۱ (کانفیگ‌های V2Ray با sing-box)، aether = مدل ۲ */
+type Engine = 'v2' | 'aether';
+type Theme = 'violet' | 'cyan' | 'emerald' | 'sunset' | 'aurora' | 'rose';
 type IpInfo = { query: string; country: string; countryCode: string } | null;
 type Toast = { id: number; msg: string; type: 'ok' | 'err' };
 type CustomSub = { id: string; name: string; url: string };
@@ -33,7 +34,10 @@ const HIST = 90;
 const PAGES: Page[] = ['home', 'servers', 'stats', 'settings'];
 const THEMES: Record<Theme, [string, string]> = {
   violet: ['#8b5cff', '#ff4fd8'], cyan: ['#22d3ee', '#3b82f6'], emerald: ['#10f5a8', '#22d3ee'], sunset: ['#ff7a45', '#ff3d81'],
+  aurora: ['#7c5cff', '#00e5b0'], rose: ['#ff4f8b', '#a78bfa'],
 };
+const AE_PROTOS: [AetherProto, string][] = [['masque', 'MASQUE'], ['wg', 'WireGuard'], ['gool', 'Gool']];
+const AE_SCANS: AetherScan[] = ['turbo', 'balanced', 'thorough', 'ironclad'];
 const ST: Record<Status, string> = { idle: '#ff5a7a', connecting: '#ffb547', connected: '#10f5a8' };
 
 const load = <T,>(k: string, d: T): T => {
@@ -121,11 +125,14 @@ function ScanPanel({ s, T, compact }: { s: ScanState; T: (typeof t)['fa']; compa
 
 export default function App() {
   const [lang, setLang] = useState<Lang>(() => load('lang', 'fa'));
-  const [mode, setMode] = useState<Mode>(() => load<string>('mode', 'proxy') === 'tun' ? 'tun' : 'proxy');
-  const [model, setModel] = useState<ConnectionModel>(() => load<string>('model', 'configs') === 'aether' ? 'aether' : 'configs');
-  const [modelPicker, setModelPicker] = useState(false);
-  const [aetherStage, setAetherStage] = useState('');
-  const connectionLock = useRef(false);
+  const [mode, setMode] = useState<Mode>(() => load('mode', 'tun'));
+  // v2.5 · مدل اتصال
+  const [engine, setEngine] = useState<Engine>(() => load('engine', 'v2'));
+  const [aeProto, setAeProto] = useState<AetherProto>(() => load('aeProto', 'masque'));
+  const [aeScan, setAeScan] = useState<AetherScan>(() => load('aeScan', 'balanced'));
+  const [aeH2, setAeH2] = useState<boolean>(() => load('aeH2', false));
+  const [aeLog, setAeLog] = useState('');
+  const [aeSince, setAeSince] = useState(0);
   const [auto, setAuto] = useState<boolean>(() => load('auto', true));
   const [sortPing, setSortPing] = useState<boolean>(() => load('sortPing', false));
   const [links, setLinks] = useState<string[]>(() => load('links', []));
@@ -218,11 +225,21 @@ export default function App() {
 
   useEffect(() => save('lang', lang), [lang]);
   useEffect(() => save('mode', mode), [mode]);
-  useEffect(() => save('model', model), [model]);
+  useEffect(() => save('engine', engine), [engine]);
+  useEffect(() => save('aeProto', aeProto), [aeProto]);
+  useEffect(() => save('aeScan', aeScan), [aeScan]);
+  useEffect(() => save('aeH2', aeH2), [aeH2]);
+  // لاگ زنده‌ی Aether (مثلاً «در حال اسکن گیت‌وی‌ها...») زیر دکمه‌ی اتصال
   useEffect(() => {
-    const pending = listen<string>('aether-progress', ({ payload }) => setAetherStage(payload));
-    return () => { pending.then((unlisten) => unlisten()).catch(() => {}); };
+    const un = listen<string>('aether-log', (e) => setAeLog(String(e.payload || '')));
+    return () => { un.then((f) => f()).catch(() => {}); };
   }, []);
+  // تایمر ثانیه‌شمار حین اسکن Aether
+  useEffect(() => {
+    if (status !== 'connecting' || step !== 'aether') return;
+    const id = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(id);
+  }, [status, step]);
   useEffect(() => save('auto', auto), [auto]);
   useEffect(() => save('sortPing', sortPing), [sortPing]);
   useEffect(() => save('links', links), [links]);
@@ -319,7 +336,7 @@ export default function App() {
     showToast(msg, 'err');
   };
 
-  // Fetch on Connect in model 1, not on startup: model 2 needs no subscriptions.
+  useEffect(() => { if (!links.length) updateConfigs(); }, []); // eslint-disable-line
 
   // مانیتور اتصال، تایمر و سرعت
   useEffect(() => {
@@ -384,7 +401,7 @@ export default function App() {
    * reuse=true: ساب رو دوباره دانلود نمی‌کنه، فقط با همون استخر قبلی دوباره سریع‌ترین‌ها رو پیدا می‌کنه
    */
   async function updateConfigs(reuse = false) {
-    if (busy || status === 'connecting' || (model === 'aether' && status !== 'idle')) return;
+    if (busy || status === 'connecting') return;
     setBusy('fetch');
     setScan({ phase: 'fetch', pool: 0, tcpDone: 0, tcpTotal: 0, alive: 0, tested: 0, ok: 0, target: topN });
     testingRef.current = true;
@@ -437,7 +454,6 @@ export default function App() {
       if (!all.some((n) => n.id === selected)) setSelected(all[0].id);
       showToast(pub.length ? T.scanDone(top.length, poolSize, own.length) : T.updated(all.length, skipped), 'ok');
       if (failed.length) showToast(T.srcFailed(failed.join('، ')), 'err');
-      return { nodes: all, pings: p };
     } catch (e) {
       fail(`${T.fetchErr}: ${errMsg(e)}`);
     } finally {
@@ -464,10 +480,15 @@ export default function App() {
       systemProxy: mode === 'proxy',
       port: PROXY_PORT,
     });
+    onUp(n.id);
+  }
+
+  /** بعد از بالا اومدن تونل (هر دو مدل) */
+  function onUp(id: string | null) {
     lastStats.current = null;
     setSpeed({ up: 0, down: 0, total: 0 });
     setHist([]);
-    setActiveId(n.id);
+    setActiveId(id);
     setSince(Date.now());
     setNow(Date.now());
     setStatus('connected');
@@ -477,7 +498,7 @@ export default function App() {
   }
 
   async function testAll() {
-    if (busy || status === 'connecting' || !nodes.length || (model === 'aether' && status !== 'idle')) return;
+    if (busy || status === 'connecting' || !nodes.length) return;
     setBusy('test');
     testingRef.current = true;
     const reconnect = status === 'connected' && mode === 'tun' ? active : undefined;
@@ -491,53 +512,60 @@ export default function App() {
   }
 
   async function disconnect() {
-    try { await invoke('stop_core'); }
-    catch (e) { fail(errMsg(e)); return; }
+    await invoke('stop_core').catch(() => {});
     setStatus('idle');
     setActiveId(null);
     setIp(null);
-    setAetherStage('');
+  }
+
+  /**
+   * v2.5 · مدل ۲: اول Aether بالا میاد و گیت‌وی سالم پیدا می‌کنه (SOCKS روی 1819)،
+   * بعد sing-box جلوش TUN یا پروکسی ویندوز رو راه می‌ندازه. همه‌چی داخل خود برنامه.
+   */
+  async function connectAether() {
+    if (mode === 'tun' && !(await invoke<boolean>('is_admin').catch(() => false))) { surface(); return setAdminAsk(true); }
+    setStatus('connecting'); setStep('aether'); setAeLog(''); setAeSince(Date.now()); setNow(Date.now());
+    try {
+      await invoke('start_aether', { protocol: aeProto, scan: aeScan, h2: aeH2 });
+      setStep('start');
+      await invoke('start_core', {
+        config: JSON.stringify(buildAetherConfig(mode, PROXY_PORT)),
+        systemProxy: mode === 'proxy',
+        port: PROXY_PORT,
+      });
+      onUp(null);
+    } catch (e) {
+      await invoke('stop_core').catch(() => {});
+      setStatus('idle'); setStep('');
+      if (String(e) !== 'cancelled') fail(`${T.connErr}: ${errMsg(e)}`);
+    }
   }
 
   async function toggle() {
-    if (connectionLock.current || status === 'connecting' || busy) return;
-    connectionLock.current = true;
+    // اسکن Aether ممکنه طول بکشه؛ زدن دوباره‌ی دکمه = لغو
+    if (status === 'connecting' && engine === 'aether' && step === 'aether') { await invoke('stop_core').catch(() => {}); return; }
+    if (status === 'connecting' || busy) return;
+    if (status === 'connected') return disconnect();
+    if (engine === 'aether') return connectAether();
+    if (!nodes.length) return fail(T.noConfigs);
+    if (mode === 'tun' && !(await invoke<boolean>('is_admin').catch(() => false))) { surface(); return setAdminAsk(true); }
+
+    setStatus('connecting');
     try {
-      if (status === 'connected') return await disconnect();
-      if (mode === 'tun' && !(await invoke<boolean>('is_admin').catch(() => false))) { surface(); return setAdminAsk(true); }
-      if (model === 'aether') {
-        setStatus('connecting'); setStep('start'); setAetherStage('discovering');
-        await invoke('start_aether', {
-          config: JSON.stringify(buildAetherConfig(mode, PROXY_PORT, 1819)),
-          systemProxy: mode === 'proxy',
-          port: PROXY_PORT,
-        });
-        lastStats.current = null;
-        setSpeed({ up: 0, down: 0, total: 0 }); setHist([]);
-        setActiveId(null); setSince(Date.now()); setNow(Date.now());
-        setStatus('connected'); setStep(''); setFlash((f) => f + 1);
-        checkIp();
-        return;
-      }
-      let available = nodes, measured = pings;
-      // Return the fresh data directly: React state has not committed yet.
-      if (!nodes.length || (auto && Date.now() - fetchedAt > 3600000)) {
-        const fresh = await updateConfigs();
-        if (!fresh) return;
-        available = fresh.nodes; measured = fresh.pings;
-      }
-      setStatus('connecting');
       let order: VNode[];
       if (auto) {
-        setStep('test');
-        testingRef.current = true;
-        const p = await runTest(available);
-        measured = p; setPings(p);
-        testingRef.current = false;
-        order = available.filter((n) => (measured[n.id] ?? -1) > 0).sort((a, b) => measured[a.id] - measured[b.id]);
+        let p = pings;
+        if (!nodes.some((n) => (p[n.id] ?? -1) > 0)) {
+          setStep('test');
+          testingRef.current = true;
+          p = await runTest(nodes);
+          setPings(p);
+          testingRef.current = false;
+        }
+        order = nodes.filter((n) => (p[n.id] ?? -1) > 0).sort((a, b) => p[a.id] - p[b.id]).slice(0, 3);
         if (!order.length) throw new Error(T.noWorking);
       } else {
-        order = [available.find((n) => n.id === selected) || available[0]];
+        order = [nodes.find((n) => n.id === selected) || nodes[0]];
       }
       setStep('start');
       let last: unknown;
@@ -549,20 +577,14 @@ export default function App() {
       testingRef.current = false;
       setStatus('idle');
       setStep('');
-      setActiveId(null);
-      setIp(null);
       fail(`${T.connErr}: ${errMsg(e)}`);
-    } finally {
-      connectionLock.current = false;
     }
   }
 
   async function pick(n: VNode) {
-    if (busy || status === 'connecting' || connectionLock.current) return;
-    if (model === 'aether' && status !== 'idle') return fail(lang === 'fa' ? 'برای تغییر مدل ابتدا اتصال را قطع کنید.' : 'Disconnect before changing the model.');
-    setModel('configs');
     setSelected(n.id);
     setAuto(false);
+    if (engine === 'aether') return; // موقع اتصال مدل ۲ فقط انتخاب میشه
     if (status === 'connected' && n.id !== activeId) {
       setStatus('connecting');
       setStep('switch');
@@ -572,19 +594,17 @@ export default function App() {
 
   /** مستقیم وصل شو به یه سرور مشخص (از لیست یا پالت) */
   async function connectTo(n: VNode) {
-    if (status === 'connecting' || busy || connectionLock.current) return;
-    if (model === 'aether' && status !== 'idle') return fail(lang === 'fa' ? 'برای تغییر مدل ابتدا اتصال را قطع کنید.' : 'Disconnect before changing the model.');
-    setModel('configs');
+    if (status === 'connecting' || busy) return;
     if (status === 'connected') return pick(n);
     setSelected(n.id); setAuto(false);
+    if (engine === 'aether') setEngine('v2'); // وصل شدن به یه سرور مشخص یعنی مدل ۱
     if (mode === 'tun' && !(await invoke<boolean>('is_admin').catch(() => false))) return setAdminAsk(true);
     setStatus('connecting'); setStep('start');
     await startNode(n).catch((e) => { setStatus('idle'); setStep(''); fail(`${T.connErr}: ${errMsg(e)}`); });
   }
 
   async function connectFastest() {
-    if (status === 'connecting' || busy || connectionLock.current || !nodes.length) return;
-    if (model === 'aether' && status !== 'idle') return fail(lang === 'fa' ? 'برای تغییر مدل ابتدا اتصال را قطع کنید.' : 'Disconnect before changing the model.');
+    if (status === 'connecting' || busy || !nodes.length) return;
     let p = pings;
     if (!nodes.some((n) => (p[n.id] ?? -1) > 0)) {
       setBusy('test'); testingRef.current = true;
@@ -674,27 +694,29 @@ export default function App() {
 
   // اتصال خودکار موقع باز شدن برنامه (یه بار، وقتی سرورها آماده‌ان)
   const autoDone = useRef(false);
-  const resumeConnect = useRef(load<boolean>('resumeConnect', false));
   useEffect(() => {
-    if (autoDone.current || (!autoConnect && !resumeConnect.current) || splash || status !== 'idle' || busy) return;
+    if (autoDone.current || !autoConnect || splash || (engine === 'v2' && !nodes.length) || status !== 'idle' || busy) return;
     autoDone.current = true;
-    resumeConnect.current = false; save('resumeConnect', false);
     fromTray.current = true; // اگه پنجره مخفیه و خطا داد، بیارش جلو
     actions.current.toggle().finally(() => { fromTray.current = false; });
-  }, [autoConnect, splash, model, status, busy]);
+  }, [autoConnect, splash, nodes.length, status, busy, engine]);
 
   // اعلان ویندوز وقتی پنجره مخفیه (Rust خودش چک می‌کنه)
   const prevStatus = useRef<Status>('idle');
   useEffect(() => {
     const prev = prevStatus.current; prevStatus.current = status;
-    if (status === 'connected' && prev !== 'connected') invoke('notify', { title: T.notifyOn, body: active ? splitFlag(active.name).label : 'MahyarVPN' }).catch(() => {});
+    if (status === 'connected' && prev !== 'connected') invoke('notify', { title: T.notifyOn, body: engine === 'aether' ? `${T.m2} · Aether` : active ? splitFlag(active.name).label : 'MahyarVPN' }).catch(() => {});
     if (status === 'idle' && prev === 'connected') invoke('notify', { title: T.notifyOff, body: 'MahyarVPN' }).catch(() => {});
   }, [status]); // eslint-disable-line
 
   /* ---------- derived ---------- */
   const label = status === 'connected' ? T.connected : status === 'connecting' ? T.connecting : T.idle;
-  const stepText = step === 'test' ? T.stepTest : step === 'start' ? T.stepStart : step === 'switch' ? T.stepSwitch : '';
-  const activeLabel = active ? splitFlag(active.name).label : '';
+  const stepText = step === 'test' ? T.stepTest : step === 'start' ? T.stepStart : step === 'switch' ? T.stepSwitch : step === 'aether' ? T.stepAether : '';
+  const activeLabel = engine === 'aether' && status !== 'idle' ? 'Aether' : active ? splitFlag(active.name).label : '';
+  const lite = engine === 'aether';
+  const aeSecs = Math.max(0, Math.floor((now - aeSince) / 1000));
+  const ipCc = ip && typeof ip === 'object' ? ip.countryCode : undefined;
+  const stepList: Step[] = lite ? ['aether', 'start'] : ['test', 'start'];
   useEffect(() => {
     const st = status === 'connected' ? `● ${T.connected}${activeLabel ? ` · ${activeLabel}` : ''}` : status === 'connecting' ? `◌ ${T.connecting}...` : `○ ${T.idle}`;
     invoke('set_tray', {
@@ -707,6 +729,30 @@ export default function App() {
       tooltip: `MahyarVPN · ${status === 'connected' ? T.connected : status === 'connecting' ? T.connecting : T.idle}${activeLabel ? ` · ${activeLabel}` : ''}`,
     }).catch(() => {});
   }, [status, lang, activeLabel]); // eslint-disable-line
+  const EnginePick = (
+    <div className={`eng ${status !== 'idle' ? 'locked' : ''}`} role="radiogroup" aria-label={T.engine} title={status !== 'idle' ? T.lockedWhileOn : T.engine}>
+      <span className="eng-glow" data-e={engine} />
+      {(['v2', 'aether'] as Engine[]).map((e) => (
+        <button key={e} role="radio" aria-checked={engine === e} className={`eng-b ${engine === e ? 'on' : ''}`} disabled={status !== 'idle'} onClick={() => setEngine(e)}>
+          <span className="eng-ic">{e === 'v2' ? I.layers : I.aether}</span>
+          <span className="eng-tx"><b>{e === 'v2' ? T.m1 : T.m2}</b><small>{e === 'v2' ? T.m1Sub : T.m2Sub}</small></span>
+        </button>
+      ))}
+    </div>
+  );
+  const ModeCard = (
+    <Card className="mode-card">
+      <div className="lbl">{T.modeTitle}{status !== 'idle' && <span className="lbl-lock">{I.lock}{T.lockedWhileOn}</span>}</div>
+      <div className="mode-pick">
+        {(['tun', 'proxy'] as Mode[]).map((m) => (
+          <button key={m} className={`mp rp ${mode === m ? 'on' : ''}`} disabled={status !== 'idle'} onClick={() => setMode(m)}>
+            <span className="mp-ic">{m === 'tun' ? I.cpu : I.proxy}</span>
+            <span className="mp-tx"><b>{m === 'tun' ? 'TUN' : 'Proxy'}</b><small>{m === 'tun' ? T.tunHint : T.proxyHint}</small></span>
+          </button>
+        ))}
+      </div>
+    </Card>
+  );
   const mins = fetchedAt ? Math.max(0, Math.floor((now - fetchedAt) / 60000)) : -1;
   const updatedText = mins < 0 ? T.never : mins < 1 ? T.justNow : T.ago(mins);
   const fresh = mins < 0 ? 'bad' : mins < 60 ? 'good' : mins < 360 ? 'mid' : 'bad';
@@ -733,6 +779,7 @@ export default function App() {
       { id: 'imp', group: T.actions, icon: I.paste, label: T.importCfg, hint: 'Ctrl+I', run: () => setImportOpen(true) },
       { id: 'upd', group: T.actions, icon: I.rocket, label: T.checkUpd, run: () => checkUpdate() },
       { id: 'ping', group: T.actions, icon: I.pulse, label: T.testPing, hint: 'Ctrl+T', run: testAll },
+      { id: 'eng', group: T.actions, icon: engine === 'v2' ? I.aether : I.layers, label: `${T.engine}: ${engine === 'v2' ? T.m2 : T.m1}`, run: () => status === 'idle' && setEngine(engine === 'v2' ? 'aether' : 'v2') },
       { id: 'mode', group: T.actions, icon: mode === 'tun' ? I.proxy : I.cpu, label: `${T.switchMode} ${mode === 'tun' ? 'Proxy' : 'TUN'}`, run: () => status === 'idle' && setMode(mode === 'tun' ? 'proxy' : 'tun') },
       { id: 'lang', group: T.actions, icon: I.lang, label: T.toggleLang, run: () => setLang(lang === 'fa' ? 'en' : 'fa') },
       ...(Object.keys(THEMES) as Theme[]).map((th) => ({ id: 'th-' + th, group: T.theme, icon: I.palette, label: T.themes[th], run: () => setTheme(th) })),
@@ -741,12 +788,56 @@ export default function App() {
     ];
     const q = palQ.trim().toLowerCase();
     return q ? A.filter((x) => x.label.toLowerCase().includes(q) || x.group.toLowerCase().includes(q) || (x.hint ?? '').toLowerCase().includes(q)) : A.filter((x) => !x.id.startsWith('n-')).concat(A.filter((x) => x.id.startsWith('n-')).slice(0, 6));
-  }, [palQ, status, mode, lang, nodes, pings, T, auto, busy, selected, activeId]); // eslint-disable-line
+  }, [palQ, status, mode, engine, lang, nodes, pings, T, auto, busy, selected, activeId]); // eslint-disable-line
   const runPal = (it?: PItem) => { if (!it) return; setPal(false); window.setTimeout(it.run, 60); };
 
   /* ================= PAGES ================= */
-  const AdvancedDashboard = (
-    <div className="pg dash">
+  const Dashboard = (
+    <div className={`pg dash ${lite ? 'lite' : ''}`}>
+      <Card className="stage">
+        <div className="stage-top">
+          <span className="st-dot solo" title={label} />
+          <WaveName />
+          <div className="st-mode">{mode === 'tun' ? I.cpu : I.proxy}{mode.toUpperCase()}</div>
+        </div>
+        <div className="globe-wrap"><Globe status={status} markers={lite ? [] : markers} target={status !== 'idle' ? (lite ? ipCc : active ? splitFlag(active.name).cc : undefined) : undefined} a1={a1} a2={a2} st={ST[status]} reduce={reduce} /></div>
+        <div className="core-area">
+          <div className="mag" ref={magRef} onMouseMove={onMag} onMouseLeave={offMag}>
+            <button className={`core ${status} ${shake ? 'shake' : ''}`} onClick={toggle} disabled={!!busy && status !== 'connected'} aria-label={status === 'connected' ? T.disconnect : T.connect}>
+              <span className="core-halo" />
+              <span className="core-ring" />
+              <svg className="core-arc" viewBox="0 0 100 100"><circle cx="50" cy="50" r="46" /></svg>
+              {flash > 0 && <span className="shock" key={flash} />}
+              <span className="core-in">
+                <span className="core-ic"><CoreIcon status={status} /></span>
+                <span className="core-tx">{status === 'connected' ? T.disconnect : status === 'connecting' ? (lite && step === 'aether' ? T.cancel : '...') : T.connect}</span>
+              </span>
+            </button>
+          </div>
+          <div className="core-label">
+            <b key={label}>{status === 'connecting' && stepText ? stepText : label}</b>
+            {status === 'connected'
+              ? <span className="timer mono" data-on="true">{fmtTime(now - since)}</span>
+              : status === 'connecting' && lite && step === 'aether'
+                ? <small className="ae-log" dir="ltr" title={aeLog}><span className="mono">{aeSecs}s</span>{aeLog || T.wait}</small>
+                : <small>{status === 'connecting' ? T.wait : T.tapConnect}</small>}
+          </div>
+          {EnginePick}
+        </div>
+        {status === 'connecting' && <div className="steps">{stepList.map((s, i) => <i key={s} className={step === s || (step === 'start' && i === 0) || step === 'switch' ? 'on' : ''} />)}</div>}
+      </Card>
+
+      {lite ? (
+      /* v2.5 · مدل ۲: صفحه‌ی خلوت، فقط روش اتصال */
+      <div className="side lite-side">
+        {ModeCard}
+        <Card className="ae-card">
+          <span className="ae-badge">{I.aether}</span>
+          <div className="ae-tx"><b>Aether · {AE_PROTOS.find((x) => x[0] === aeProto)?.[1]}{aeProto === 'masque' && aeH2 ? ' · h2' : ''}</b><small>{T.m2Hint}</small></div>
+          <button className="tb sm" onClick={() => setPage('settings')} data-tip={T.settings}>{I.settings}</button>
+        </Card>
+      </div>
+      ) : (
       <div className="side">
         {/* v2.4 · کارهای سریع: دریافت کانفیگ همیشه دم دسته */}
         <Card className="dock">
@@ -844,110 +935,10 @@ export default function App() {
           </div>
         </Card>
         </>
-        ) : (
-        <Card className="mode-card">
-          <div className="lbl">{T.modeTitle}</div>
-          <div className="mode-pick">
-            {(['tun', 'proxy'] as Mode[]).map((m) => (
-              <button key={m} className={`mp rp ${mode === m ? 'on' : ''}`} disabled={status !== 'idle'} onClick={() => setMode(m)}>
-                <span className="mp-ic">{m === 'tun' ? I.cpu : I.proxy}</span>
-                <span className="mp-tx"><b>{m === 'tun' ? 'TUN' : 'Proxy'}</b><small>{m === 'tun' ? T.tunHint : T.proxyHint}</small></span>
-              </button>
-            ))}
-          </div>
-        </Card>
-        )}
+        ) : ModeCard}
       </div>
+      )}
     </div>
-  );
-
-  const controlsLocked = status !== 'idle' || !!busy || connectionLock.current;
-  const modelTitle = model === 'aether'
-    ? (lang === 'fa' ? 'مدل ۲: WireGuard' : 'Model 2: WireGuard')
-    : (lang === 'fa' ? 'مدل ۱: سرورهای گیت‌هاب' : 'Model 1: GitHub servers');
-  const progressText = busy === 'fetch' ? T.fetching : busy === 'scan' ? T.scanning
-    : status === 'connecting' && model === 'aether'
-      ? (aetherStage === 'checking'
-        ? (lang === 'fa' ? 'در حال بررسی اتصال اینترنت…' : 'Checking internet access…')
-        : (lang === 'fa' ? 'در حال یافتن مسیر WireGuard…' : 'Finding a WireGuard route…'))
-      : status === 'connecting' ? stepText || T.connecting : label;
-  const Dashboard = (
-    <section className="simple-home" aria-labelledby="home-title">
-      <header className="simple-heading">
-        <span className="simple-eyebrow" dir="ltr">MAHYARVPN</span>
-        <h1 id="home-title">{lang === 'fa' ? 'یک کلیک تا اتصال' : 'One click to connect'}</h1>
-        <p>{lang === 'fa' ? 'مدل و حالت اتصال را انتخاب کنید. بقیه کارها با برنامه است.' : 'Choose a model and connection mode. We handle the setup.'}</p>
-      </header>
-      <div className="simple-status" role="status" aria-live="polite">
-        <span className={`simple-indicator ${status}`} />
-        <strong>{progressText}</strong>
-        {status === 'connected' && <span className="mono">{fmtTime(now - since)}</span>}
-      </div>
-      <button className={`simple-connect ${status}`} onClick={toggle}
-        disabled={status === 'connecting' || !!busy}
-        aria-label={status === 'connected' ? T.disconnect : T.connect}>
-        {status === 'connected' ? I.shieldOk : I.power}
-        <span>{status === 'connected' ? T.disconnect : status === 'connecting' || busy ? progressText : T.connect}</span>
-      </button>
-      <div className="simple-mode" role="group" aria-label={T.modeTitle}>
-        {(['proxy', 'tun'] as Mode[]).map((m) => (
-          <button key={m} aria-pressed={mode === m} disabled={controlsLocked}
-            className={mode === m ? 'selected' : ''} onClick={() => setMode(m)}>
-            {m === 'tun' ? I.cpu : I.proxy}
-            <span dir="ltr">{m === 'tun' ? 'Tunnel Mode' : 'Proxy Mode'}</span>
-          </button>
-        ))}
-      </div>
-      <p className="simple-hint">{mode === 'tun'
-        ? (lang === 'fa' ? 'ترافیک سیستم از تونل عبور می‌کند. ویندوز دسترسی Administrator می‌خواهد.' : 'System traffic uses the tunnel. Windows administrator permission is required.')
-        : (lang === 'fa' ? 'برای مرورگرها و برنامه‌هایی که پراکسی ویندوز را رعایت می‌کنند.' : 'For browsers and apps that respect the Windows system proxy.')}</p>
-      <button className="simple-model" disabled={controlsLocked} aria-expanded={modelPicker}
-        aria-controls="model-options" onClick={() => setModelPicker((v) => !v)}>
-        <span><small>{lang === 'fa' ? 'انتخاب مدل اتصال' : 'Connection model'}</small><strong>{modelTitle}</strong></span>
-        <span>{lang === 'fa' ? 'تغییر مدل' : 'Change model'} {I.chevron}</span>
-      </button>
-      {modelPicker && (
-        <div id="model-options" className="simple-model-options" role="group" aria-label={lang === 'fa' ? 'مدل اتصال' : 'Connection model'}>
-          {(['configs', 'aether'] as ConnectionModel[]).map((m, index) => (
-            <button key={m} disabled={controlsLocked} aria-pressed={model === m}
-              onClick={() => { setModel(m); setModelPicker(false); if (m === 'configs') setAuto(true); }}>
-              <b>{lang === 'fa' ? `مدل ${index + 1}` : `Model ${index + 1}`}</b>
-              <span>{m === 'configs'
-                ? (lang === 'fa' ? 'کانفیگ‌های گیت‌هاب، انتخاب سریع‌ترین سرور قابل‌اتصال' : 'GitHub configs, fastest working server')
-                : 'WireGuard · Balanced · IPv4'}</span>
-              {model === m && I.check}
-            </button>
-          ))}
-        </div>
-      )}
-      {model === 'configs' ? (
-        <div className="simple-server">
-          <label htmlFor="home-server">{lang === 'fa' ? 'انتخاب سرور' : 'Choose server'}</label>
-          <select id="home-server" disabled={controlsLocked} value={auto ? 'auto' : selected || 'auto'}
-            onChange={(e) => { const v = e.target.value; setAuto(v === 'auto'); if (v !== 'auto') setSelected(v); }}>
-            <option value="auto">{lang === 'fa' ? 'خودکار: بهترین سرور موجود' : 'Automatic: best available server'}</option>
-            {nodes.map((n) => <option key={n.id} value={n.id}>{splitFlag(n.name).label}{(pings[n.id] ?? -1) > 0 ? ` (${pings[n.id]} ms)` : ''}</option>)}
-          </select>
-          <p>{lang === 'fa' ? 'با زدن اتصال، کانفیگ‌های لازم دریافت و اتصال واقعی سرورها بررسی می‌شود.' : 'Connect fetches configs when needed and tests servers through their tunnels.'}</p>
-          {scan && <ScanPanel s={scan} T={T} compact />}
-          <details className="simple-advanced">
-            <summary>{lang === 'fa' ? 'ابزارهای پیشرفته و کانفیگ‌ها' : 'Advanced tools and configs'}</summary>
-            {AdvancedDashboard}
-          </details>
-        </div>
-      ) : (
-        <p className="simple-aether-note">{lang === 'fa'
-          ? 'WireGuard با اسکن Balanced روی IPv4. دریافت هویت، یافتن مسیر و تنظیم پراکسی یا تونل خودکار است؛ V2Ray لازم نیست.'
-          : 'WireGuard with Balanced discovery on IPv4. Identity, routing and proxy/TUN setup are automatic. No V2Ray needed.'}</p>
-      )}
-      {status === 'connected' && (
-        <div className="simple-session">
-          <span>{modelTitle}</span>
-          <span dir="auto">{model === 'configs' ? active && splitFlag(active.name).label : 'WireGuard · Balanced · IPv4'}</span>
-          <span className="mono">{ip && typeof ip === 'object' ? ip.query : ip === 'loading' ? '…' : ''}</span>
-        </div>
-      )}
-    </section>
   );
 
   const Servers = (
@@ -1089,7 +1080,7 @@ export default function App() {
           <div className="set-t">{I.lock}{T.connection}</div>
           <div className="mode-cards">
             {(['tun', 'proxy'] as Mode[]).map((m) => (
-              <button key={m} className={`mcard rp ${mode === m ? 'on' : ''}`} disabled={status !== 'idle' || !!busy || connectionLock.current} onClick={() => setMode(m)}>
+              <button key={m} className={`mcard rp ${mode === m ? 'on' : ''}`} disabled={status !== 'idle'} onClick={() => setMode(m)}>
                 <span className="mc-ic">{m === 'tun' ? I.cpu : I.proxy}</span>
                 <b>{m === 'tun' ? 'TUN' : 'Proxy'}</b>
                 <small>{m === 'tun' ? T.tunHint : T.proxyHint}</small>
@@ -1101,6 +1092,32 @@ export default function App() {
           <div className="opt"><div><b>{T.sortPing}</b><small>{T.sortHint}</small></div><Switch on={sortPing} onChange={setSortPing} /></div>
           <div className="opt"><div><b>{T.startup}</b><small>{T.startupHint}</small></div><Switch on={startup} onChange={(v) => invoke('set_autostart', { on: v }).then(() => setStartup(v)).catch((e) => fail(errMsg(e)))} /></div>
           <div className="opt"><div><b>{T.autoConnect}</b><small>{T.autoConnectHint}</small></div><Switch on={autoConnect} onChange={setAutoConnect} /></div>
+        </Card>
+        <Card className="set">
+          <div className="set-t">{I.aether}{T.engine}</div>
+          <div className="mode-cards">
+            {(['v2', 'aether'] as Engine[]).map((e) => (
+              <button key={e} className={`mcard rp ${engine === e ? 'on' : ''}`} disabled={status !== 'idle'} onClick={() => setEngine(e)}>
+                <span className="mc-ic">{e === 'v2' ? I.layers : I.aether}</span>
+                <b>{e === 'v2' ? T.m1 : T.m2}</b>
+                <small>{e === 'v2' ? T.m1Hint : T.m2Hint}</small>
+                <span className="mc-check">{I.check}</span>
+              </button>
+            ))}
+          </div>
+          <div className={`ae-opts ${engine === 'aether' ? '' : 'dim'}`}>
+            <div className="opt col"><div><b>{T.aeProto}</b><small>{T.aeProtoHint}</small></div>
+              <div className="seg wide">
+                {AE_PROTOS.map(([v, l]) => <button key={v} className={aeProto === v ? 'on' : ''} disabled={status !== 'idle'} onClick={() => setAeProto(v)}>{l}</button>)}
+              </div>
+            </div>
+            <div className="opt col"><div><b>{T.aeScan}</b><small>{T.aeScanHint}</small></div>
+              <div className="seg wide">
+                {AE_SCANS.map((v) => <button key={v} className={aeScan === v ? 'on' : ''} disabled={status !== 'idle'} onClick={() => setAeScan(v)}>{T.aeScans[v]}</button>)}
+              </div>
+            </div>
+            {aeProto === 'masque' && <div className="opt"><div><b>{T.aeH2}</b><small>{T.aeH2Hint}</small></div><Switch on={aeH2} onChange={setAeH2} disabled={status !== 'idle'} /></div>}
+          </div>
         </Card>
         <Card className="set">
           <div className="set-t">{I.palette}{T.appearance}</div>
@@ -1269,11 +1286,7 @@ export default function App() {
             <div className="m-ic">{I.shieldOk}</div>
             <h3>{T.adminTitle}</h3>
             <p>{T.adminText}</p>
-            <button className="btn accent rp" onClick={() => {
-              save('model', model); save('mode', mode); save('auto', auto); save('selected', selected);
-              save('resumeConnect', true);
-              invoke('relaunch_admin').catch((e) => { save('resumeConnect', false); setAdminAsk(false); showToast(errMsg(e), 'err'); });
-            }}>{T.relaunch}</button>
+            <button className="btn accent rp" onClick={() => invoke('relaunch_admin').catch((e) => { setAdminAsk(false); showToast(errMsg(e), 'err'); })}>{T.relaunch}</button>
             <button className="btn rp" onClick={() => { setMode('proxy'); setAdminAsk(false); }}>{T.useProxy}</button>
             <button className="btn ghost" onClick={() => setAdminAsk(false)}>{T.cancel}</button>
           </div>
@@ -1283,7 +1296,7 @@ export default function App() {
       {splash && (
         <div className="splash">
           <div className="sp-logo">
-            <svg viewBox="0 0 32 32"><path className="sp-path" d="M16 2.5l11 4.2v8.1c0 7-4.9 11.9-11 14.2C9.9 26.7 5 21.8 5 14.8V6.7z" /><path className="sp-check" d="M11 15.5l3.6 3.6L21.5 12" /></svg>
+            <svg viewBox="0 0 32 32"><ellipse className="sp-orbit" cx="16" cy="16.5" rx="14.5" ry="5.2" transform="rotate(-22 16 16.5)" /><path className="sp-path" d="M16 3l10 3.8v7.6c0 6.6-4.4 11.1-10 13.3-5.6-2.2-10-6.7-10-13.3V6.8z" /><path className="sp-check" d="M11.4 15.4l3.3 3.3 6-6.4" /></svg>
             <span className="sp-ring" />
           </div>
           <div className="sp-name">Mahyar<b className="grad">VPN</b></div>

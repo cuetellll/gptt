@@ -19,10 +19,9 @@ const fa = {
   stepTest: 'پیدا کردن سریع‌ترین سرور', stepStart: 'ساختن تونل رمزنگاری‌شده', stepSwitch: 'تعویض سرور',
   noMatch: 'سروری با این فیلتر پیدا نشد', change: 'تغییر', fastest: 'وصل به سریع‌ترین', current: 'سرور فعلی', location: 'موقعیت',
   mode: 'حالت اتصال', connection: 'اتصال', appearance: 'ظاهر', theme: 'رنگ تم', language: 'زبان', reduce: 'کاهش انیمیشن', reduceHint: 'برای سیستم‌های ضعیف',
-  subscription: 'ساب‌اسکریپشن', configs: 'کانفیگ', shortcuts: 'میانبرهای کیبورد', about: 'درباره', aboutText: 'کلاینت VPN ویندوز بر پایه‌ی sing-box',
+  subscription: 'ساب‌اسکریپشن', configs: 'کانفیگ', shortcuts: 'میانبرهای کیبورد', about: 'درباره', aboutText: 'کلاینت VPN ویندوز بر پایه‌ی sing-box و Aether',
   liveTraffic: 'ترافیک زنده', pingDist: 'توزیع پینگ سرورها', protoMix: 'پروتکل‌ها', session: 'جلسه‌ی فعلی', notConnectedYet: 'وصل شو تا آمار زنده بیاد',
   palette: 'دنبال چی می‌گردی؟ دستور یا سرور...', paletteHint: 'جستجو یا پرش', actions: 'دستورات', goTo: 'برو به', switchMode: 'تغییر حالت به', toggleLang: 'English',
-  themes: { violet: 'بنفش نئونی', cyan: 'آبی یخی', emerald: 'زمردی', sunset: 'غروب' },
   kConnect: 'اتصال / قطع', kConfigs: 'دریافت کانفیگ', kPing: 'تست پینگ', kSearch: 'جستجوی سرور', kPalette: 'پالت دستورات', kPages: 'جابجایی صفحه‌ها', kFull: 'تمام‌صفحه',
   trayShow: 'باز کردن MahyarVPN', startup: 'اجرا با ویندوز', startupHint: 'بی‌صدا کنار ساعت باز میشه', autoConnect: 'اتصال خودکار', autoConnectHint: 'موقع باز شدن برنامه خودش وصل میشه', notifyOn: 'وصل شدی ✓', notifyOff: 'اتصال قطع شد', trayQuit: 'خروج کامل', toTray: 'رفتن به کنار ساعت (System Tray)',
   rescan: 'اسکن دوباره', scanning: 'در حال اسکن...', scanTitle: 'اسکن هوشمند با اینترنت تو',
@@ -42,6 +41,14 @@ const fa = {
   copyCfg: 'کپی کانفیگ', cfgCopied: 'کانفیگ کپی شد', modeTitle: 'حالت اتصال', lockedWhileOn: 'برای تغییر، اول قطع کن',
   checkUpd: 'بررسی نسخه‌ی جدید', checkingUpd: 'در حال بررسی...', upToDate: (v: string) => `آخرین نسخه رو داری (v${v})`, newVer: (v: string) => `نسخه‌ی جدید v${v} اومده`, updFail: 'بررسی آپدیت ناموفق بود', download: 'دانلود', noRepo: 'آدرس ریپو تنظیم نشده (فقط در بیلد گیت‌هاب)', kImport: 'افزودن کانفیگ',
   manualCount: (n: number) => `${n} کانفیگ دستی`, clearManual: 'پاک کردن دستی‌ها', manualCleared: 'کانفیگ‌های دستی پاک شدن',
+  // v2.5 · مدل اتصال
+  engine: 'مدل اتصال', m1: 'مدل ۱', m2: 'مدل ۲', m1Sub: 'V2Ray', m2Sub: 'Aether',
+  m1Hint: 'کانفیگ‌های V2Ray از ساب، با انتخاب سرور', m2Hint: 'تونل WARP خودکار، بدون کانفیگ و بدون V2Ray',
+  stepAether: 'پیدا کردن گیت‌وی سالم', aeProto: 'پروتکل Aether', aeProtoHint: 'MASQUE برای ایران پیشنهاد میشه؛ اگه وصل نشد WireGuard یا Gool رو امتحان کن',
+  aeScan: 'نوع اسکن', aeScanHint: 'سریع زودتر وصل میشه، مطمئن کندتره ولی گیت‌وی بهتری پیدا می‌کنه',
+  aeScans: { turbo: 'سریع', balanced: 'متعادل', thorough: 'دقیق', ironclad: 'مطمئن' } as Record<string, string>,
+  aeH2: 'MASQUE روی HTTP/2', aeH2Hint: 'وقتی UDP بسته‌ست یا مدام قطع میشه روشنش کن',
+  themes: { violet: 'بنفش نئونی', cyan: 'آبی یخی', emerald: 'زمردی', sunset: 'غروب', aurora: 'شفق', rose: 'رز' },
 
 };
 type Dict = typeof fa;
@@ -64,10 +71,9 @@ const en: Dict = {
   stepTest: 'Finding the fastest server', stepStart: 'Building encrypted tunnel', stepSwitch: 'Switching server',
   noMatch: 'No server matches this filter', change: 'Change', fastest: 'Connect fastest', current: 'Current server', location: 'Location',
   mode: 'Connection mode', connection: 'Connection', appearance: 'Appearance', theme: 'Theme', language: 'Language', reduce: 'Reduce motion', reduceHint: 'For low-end machines',
-  subscription: 'Subscription', configs: 'configs', shortcuts: 'Keyboard shortcuts', about: 'About', aboutText: 'Windows VPN client powered by sing-box',
+  subscription: 'Subscription', configs: 'configs', shortcuts: 'Keyboard shortcuts', about: 'About', aboutText: 'Windows VPN client powered by sing-box and Aether',
   liveTraffic: 'Live traffic', pingDist: 'Server latency distribution', protoMix: 'Protocols', session: 'Current session', notConnectedYet: 'Connect to see live stats',
   palette: 'Type a command or server...', paletteHint: 'Search or jump', actions: 'Actions', goTo: 'Go to', switchMode: 'Switch mode to', toggleLang: 'فارسی',
-  themes: { violet: 'Neon violet', cyan: 'Ice blue', emerald: 'Emerald', sunset: 'Sunset' },
   kConnect: 'Connect / disconnect', kConfigs: 'Get configs', kPing: 'Test ping', kSearch: 'Search servers', kPalette: 'Command palette', kPages: 'Switch pages', kFull: 'Fullscreen',
   trayShow: 'Open MahyarVPN', startup: 'Start with Windows', startupHint: 'Opens quietly in the tray', autoConnect: 'Auto-connect', autoConnectHint: 'Connect as soon as the app opens', notifyOn: 'Connected ✓', notifyOff: 'Disconnected', trayQuit: 'Quit', toTray: 'Hide to system tray',
   rescan: 'Rescan', scanning: 'Scanning...', scanTitle: 'Smart scan on your network',
@@ -87,6 +93,13 @@ const en: Dict = {
   copyCfg: 'Copy config', cfgCopied: 'Config copied', modeTitle: 'Connection mode', lockedWhileOn: 'Disconnect to change',
   checkUpd: 'Check for updates', checkingUpd: 'Checking...', upToDate: (v) => `You're up to date (v${v})`, newVer: (v) => `New version v${v} is out`, updFail: 'Update check failed', download: 'Download', noRepo: 'Repo not set (GitHub builds only)', kImport: 'Add config',
   manualCount: (n) => `${n} manual configs`, clearManual: 'Clear manual', manualCleared: 'Manual configs cleared',
+  engine: 'Connection model', m1: 'Model 1', m2: 'Model 2', m1Sub: 'V2Ray', m2Sub: 'Aether',
+  m1Hint: 'V2Ray configs from your subscriptions, pick a server', m2Hint: 'Automatic WARP tunnel, no configs, no V2Ray',
+  stepAether: 'Finding a healthy gateway', aeProto: 'Aether protocol', aeProtoHint: 'MASQUE is recommended; try WireGuard or Gool if it fails',
+  aeScan: 'Scan mode', aeScanHint: 'Fast connects sooner, Ironclad is slower but picks a better gateway',
+  aeScans: { turbo: 'Turbo', balanced: 'Balanced', thorough: 'Thorough', ironclad: 'Ironclad' },
+  aeH2: 'MASQUE over HTTP/2', aeH2Hint: 'Turn on if UDP is blocked or it keeps dropping',
+  themes: { violet: 'Neon violet', cyan: 'Ice blue', emerald: 'Emerald', sunset: 'Sunset', aurora: 'Aurora', rose: 'Rose' },
 
 };
 export const t: Record<Lang, Dict> = { fa, en };

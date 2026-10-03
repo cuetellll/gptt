@@ -63,3 +63,9 @@ export const SCAN = {
   maxReal: 260,         // سقف کل تست واقعی
   udpExtra: 24,         // hy2/tuic با TCP تست نمیشن؛ چندتاشون مستقیم میرن تست واقعی
 };
+
+// ===== v2.5 · مدل اتصال ۲ (Aether) =====
+/** پورت SOCKS5 محلی Aether (همونی که قبلاً دستی توی V2Ray وارد می‌کردی) */
+export const AETHER_PORT = 1819;
+export type AetherProto = 'masque' | 'wg' | 'gool';
+export type AetherScan = 'turbo' | 'balanced' | 'thorough' | 'ironclad';

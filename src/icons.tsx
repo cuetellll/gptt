@@ -5,7 +5,10 @@ const S = ({ children, className }: { children: ReactNode; className?: string })
 );
 /** آیکن‌های اختصاصی (duotone) */
 export const I = {
-  logo: <svg viewBox="0 0 32 32" className="ic logo-ic"><defs><linearGradient id="lg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stopColor="var(--a1)" /><stop offset="1" stopColor="var(--a2)" /></linearGradient></defs><path d="M16 2.5l11 4.2v8.1c0 7-4.9 11.9-11 14.2C9.9 26.7 5 21.8 5 14.8V6.7z" fill="url(#lg)" /><path d="M11 15.5l3.6 3.6L21.5 12" fill="none" stroke="#fff" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" /></svg>,
+  logo: <svg viewBox="0 0 32 32" className="ic logo-ic"><defs><linearGradient id="lg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stopColor="var(--a1)" /><stop offset="1" stopColor="var(--a2)" /></linearGradient></defs><ellipse cx="16" cy="16.5" rx="14.5" ry="5.2" transform="rotate(-22 16 16.5)" fill="none" stroke="url(#lg)" strokeWidth="1.6" opacity=".9" /><path d="M16 3l10 3.8v7.6c0 6.6-4.4 11.1-10 13.3-5.6-2.2-10-6.7-10-13.3V6.8z" fill="url(#lg)" /><path d="M11.4 15.4l3.3 3.3 6-6.4" fill="none" stroke="#fff" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" /><circle cx="28.6" cy="11.4" r="1.7" fill="#fff" /></svg>,
+  /** v2.5: مدل ۱ (لایه‌های کانفیگ) و مدل ۲ (اتم/مدار Aether) */
+  layers: <S><path className="d" d="M12 3.5l8.5 4.5-8.5 4.5L3.5 8z" /><path d="M12 3.5l8.5 4.5-8.5 4.5L3.5 8z" /><path d="M3.5 12l8.5 4.5 8.5-4.5M3.5 16l8.5 4.5 8.5-4.5" /></S>,
+  aether: <S><circle className="d" cx="12" cy="12" r="2.6" /><circle cx="12" cy="12" r="2.6" /><ellipse cx="12" cy="12" rx="9" ry="3.6" transform="rotate(-30 12 12)" /><ellipse cx="12" cy="12" rx="9" ry="3.6" transform="rotate(30 12 12)" /><circle cx="19.6" cy="7.6" r="1.1" fill="currentColor" /></S>,
   home: <S><path className="d" d="M4 10.5L12 4l8 6.5V20H4z" /><path d="M4 10.5L12 4l8 6.5V20a0 0 0 0 1 0 0H4z" /><path d="M9.5 20v-5.5h5V20" /></S>,
   servers: <S><rect className="d" x="3.5" y="4" width="17" height="7" rx="2.5" /><rect x="3.5" y="4" width="17" height="7" rx="2.5" /><rect x="3.5" y="13" width="17" height="7" rx="2.5" /><path d="M7.5 7.5h.01M7.5 16.5h.01M11 7.5h3M11 16.5h3" /></S>,
   stats: <S><path className="d" d="M4 20V14l4-3 4 3 4-6 4 2v10z" /><path d="M4 14l4-3 4 3 4-6 4 2" /><path d="M4 20h16" /></S>,

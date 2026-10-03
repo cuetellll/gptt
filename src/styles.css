@@ -1,19 +1,19 @@
 /* =========================================================
-   MahyarVPN · advanced tools and shared shell
+   MahyarVPN 2.0 · "Orbit" UI
    ========================================================= */
 :root {
-  --bg: oklch(97% .008 290);
-  --glass: oklch(99% .004 290);
-  --glass-2: oklch(94% .012 290);
-  --line: oklch(89% .014 290);
-  --line-2: oklch(79% .025 290);
-  --text: oklch(26% .025 290);
-  --muted: oklch(47% .025 290);
-  --dim: oklch(51% .025 290);
+  --bg: #04060f;
+  --glass: rgba(18, 22, 46, 0.52);
+  --glass-2: rgba(255, 255, 255, 0.05);
+  --line: rgba(255, 255, 255, 0.07);
+  --line-2: rgba(255, 255, 255, 0.13);
+  --text: #f1f3ff;
+  --muted: #8890b5;
+  --dim: #5b6288;
   --good: #10f5a8; --mid: #ffd35c; --slow: #ff9f5a; --bad: #ff5a7a;
   --r: 20px; --r-s: 13px;
   --ease: cubic-bezier(.22, 1, .36, 1);
-  --spring: cubic-bezier(.22, 1, .36, 1);
+  --spring: cubic-bezier(.34, 1.56, .64, 1);
   font-family: 'Segoe UI Variable Display', 'Segoe UI', Tahoma, system-ui, sans-serif;
   color: var(--text); background: var(--bg);
   -webkit-font-smoothing: antialiased; user-select: none;
@@ -371,7 +371,7 @@ button.info-row:disabled { opacity: 1; cursor: default; }
 .opt > div:first-child { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
 .opt b { font-size: 13px; font-weight: 650; } .opt small { font-size: 11px; color: var(--muted); }
 .opt.col { flex-direction: column; align-items: stretch; }
-.swatches { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-top: 4px; }
+.swatches { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 4px; }
 .swatch { display: flex; flex-direction: column; align-items: center; gap: 7px; padding: 10px 4px; border-radius: 12px; border: 1px solid transparent; font-size: 10.5px; color: var(--muted); transition: .3s var(--spring); }
 .swatch > *:not(.ripple) { position: relative; z-index: 1; }
 .swatch i { width: 30px; height: 30px; border-radius: 50%; background: linear-gradient(135deg, var(--s1), var(--s2)); box-shadow: 0 4px 14px color-mix(in srgb, var(--s1) 50%, transparent); transition: .4s var(--spring); }
@@ -684,4 +684,57 @@ html[dir='rtl'] .add-sub { padding: 0 12px 0 5px; }
 @media (max-width: 760px) {
   .toasts { top: 52px; bottom: auto !important; }
   .acts .act { height: 58px; font-size: 12px; }
+}
+
+/* =========================================================
+   v2.5 · مدل اتصال (مدل ۱ V2Ray / مدل ۲ Aether)
+   ========================================================= */
+.eng { position: relative; display: grid; grid-template-columns: 1fr 1fr; gap: 4px; padding: 4px; width: min(320px, 100%); border-radius: 16px; background: rgba(0,0,0,.32); border: 1px solid var(--line-2); backdrop-filter: blur(14px); box-shadow: inset 0 1px 0 rgba(255,255,255,.04), 0 10px 30px rgba(0,0,0,.3); }
+.eng-glow { position: absolute; top: 4px; bottom: 4px; width: calc(50% - 6px); border-radius: 12px; background: linear-gradient(135deg, color-mix(in srgb, var(--a1) 85%, transparent), color-mix(in srgb, var(--a2) 75%, transparent)); box-shadow: 0 0 22px color-mix(in srgb, var(--a1) 45%, transparent), inset 0 1px 0 rgba(255,255,255,.25); transition: inset-inline-start .5s var(--spring); inset-inline-start: 4px; }
+.eng-glow[data-e='aether'] { inset-inline-start: calc(50% + 2px); }
+.eng-b { position: relative; z-index: 1; display: flex; align-items: center; gap: 9px; padding: 8px 10px; border-radius: 12px; color: var(--muted); text-align: start; transition: color .3s; }
+.eng-b:hover:not(:disabled) { color: var(--text); }
+.eng-b.on { color: #fff; }
+.eng-ic { width: 30px; height: 30px; border-radius: 10px; display: grid; place-items: center; flex-shrink: 0; background: rgba(255,255,255,.06); transition: .35s var(--spring); }
+.eng-b.on .eng-ic { background: rgba(255,255,255,.18); transform: rotate(-8deg) scale(1.05); }
+.eng-b.on .eng-ic .ic { filter: drop-shadow(0 0 6px #fff); }
+.eng-tx { display: flex; flex-direction: column; line-height: 1.25; min-width: 0; }
+.eng-tx b { font-size: 13px; font-weight: 750; }
+.eng-tx small { font-size: 10.5px; opacity: .75; letter-spacing: .3px; }
+.eng.locked { opacity: .55; }
+.eng-b:disabled { cursor: default; }
+
+/* مدل ۲: داشبورد خلوت */
+.dash.lite .lite-side { justify-content: center; }
+.dash.lite .mode-card .mode-pick { grid-template-columns: 1fr; }
+.dash.lite .mode-card .mp { padding: 16px; }
+.dash.lite .mode-card .mp-ic { width: 40px; height: 40px; border-radius: 12px; }
+.lbl-lock { float: inline-end; display: inline-flex; align-items: center; gap: 4px; font-size: 10.5px; color: var(--dim); text-transform: none; letter-spacing: 0; }
+.lbl-lock .ic { width: 12px; height: 12px; }
+.ae-card { display: flex; align-items: center; gap: 12px; padding: 14px; }
+.ae-badge { width: 42px; height: 42px; border-radius: 14px; display: grid; place-items: center; flex-shrink: 0; color: #fff; background: linear-gradient(135deg, var(--a1), var(--a2)); box-shadow: 0 0 24px color-mix(in srgb, var(--a1) 45%, transparent); }
+.ae-badge .ic { animation: rot 9s linear infinite; }
+.app[data-status='connecting'] .ae-badge .ic { animation-duration: 1.4s; }
+.ae-tx { flex: 1; display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.ae-tx b { font-size: 13.5px; } .ae-tx small { font-size: 11px; color: var(--muted); line-height: 1.5; }
+.ae-log { display: inline-flex; align-items: center; gap: 8px; max-width: min(360px, 90vw); overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: 11px !important; }
+.ae-log .mono { flex-shrink: 0; padding: 1px 7px; border-radius: 99px; background: color-mix(in srgb, var(--st) 18%, transparent); color: var(--st); font-weight: 700; }
+
+/* تنظیمات مدل ۲ */
+.ae-opts { display: flex; flex-direction: column; gap: 10px; transition: opacity .3s; }
+.ae-opts.dim { opacity: .45; }
+.opt.col { flex-direction: column; align-items: stretch; }
+.seg.wide { width: 100%; }
+.seg.wide button { flex: 1; padding: 0 8px; }
+.seg button:disabled { opacity: .5; cursor: default; }
+
+/* لوگوی جدید: مدار دور سپر */
+.sp-orbit { stroke: var(--a2); stroke-width: 1.2; stroke-dasharray: 100; stroke-dashoffset: 100; opacity: .9; animation: draw 1.1s .2s var(--ease) forwards; }
+.logo-ic ellipse { transform-origin: 16px 16.5px; }
+.brand:hover .logo-ic { animation: spinOnce .9s var(--spring); }
+@keyframes spinOnce { from { transform: rotate(0); } to { transform: rotate(360deg); } }
+
+@media (max-width: 760px) {
+  .eng { width: 100%; }
+  .eng-tx small { display: none; }
 }
