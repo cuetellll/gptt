@@ -1,4 +1,6 @@
 {
-  "test": true,
-  "description": "Validation target for config-check CI step"
+  "log": { "level": "warn" },
+  "outbounds": [
+    { "type": "direct", "tag": "direct" }
+  ]
 }
